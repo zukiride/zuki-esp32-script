@@ -40,10 +40,26 @@ def connect(ssid: str, key: str, timeout=10):
 def start_server():
     if wlan.isconnected():
         ip_address = wlan.ifconfig()[0]
-        print("ESP32 IP address:", ip_address)
+        print("ESP32 IP address: ", ip_address)
+        try:
+            ip_from_api = get_current_ip_from_api()
+            if ip_from_api and ip_from_api != ip_address:
+                print('IP address from API:', ip_from_api)
+                print('Local IP address:', ip_address)
+                
+                # then update the ip address
+                try:
+                    send_ip_to_api(ip_address)
+                    print('Updated IP address in API.')
+                except Exception as e:
+                    print('Failed to update IP address in API:', e)
+                    
+            else:
+                print('No need to update IP address in API.')
 
-        # Sending the IP address to GoLang server
-        send_ip_to_server(ip_address)
+        except Exception as e:
+            print('Exception occurred while retrieving IP from API:', e)
+            
 
         addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
         s = socket.socket()
@@ -178,8 +194,14 @@ def render_homepage(cl):
     cl.send('HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n'.encode())
     cl.send(formatted_html.encode())
     cl.close()
+    
+    
+# Golang server domain or cloud whatever
+url_base = "http://192.168.8.101:2323/api/ip"
 
-def send_ip_to_server(ip: str):
+def send_ip_to_api(ip: str):
+    global url_base
+    print("sending updated ip to server")
     mac = wlan.config("mac")
     mac_addr = ':'.join('{:02x}'.format(b) for b in mac)
     ip_addr = wlan.ifconfig()[0]
@@ -188,21 +210,43 @@ def send_ip_to_server(ip: str):
         "ip_addr":  ip_addr
     }
 
-    print("Data to send: ",data)
-
-    # Golang server domain or cloud whatever
-    url = "http://192.168.8.102:2323/ip"
-
     try:
-        response = requests.put(url, json=data)
+        response = requests.put(url_base, json=data)
         
         print('Response status code:', response.status_code)
         print('Response content:', response.text)
         
+        response.raise_for_status()
+        
         response.close()
+        return None
 
     except Exception as e:
-        print('Error making POST request:', e)
+        print ('Error making PUT request:', e)
+        raise e
+        
 
 
+def get_current_ip_from_api():
+    print("retrieving ip address from api")
+    mac = wlan.config("mac")
+    mac_addr = ':'.join('{:02x}'.format(b) for b in mac)
+    global url_base
+    full_url = f"{url_base}?mac_addr={mac_addr}"
+
+    try:
+        response = requests.get(full_url)
+        if response.status_code == 200:	
+            resp_json = json.loads(response.text)
+            ip = resp_json["DATA"]["ip"]
+            return ip
+            response.close()
+        else:
+            print('Failed to retrieve IP address. Status code:', response.status_code)
+            return None
+            response.close()
+
+    except Exception as e:
+        print ('Error making GET request:', e)
+        raise e
 
