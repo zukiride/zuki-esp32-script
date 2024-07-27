@@ -1,7 +1,5 @@
 import machine
 import time
-import esp32
-import esp
 import network
 import socket
 import json
@@ -36,6 +34,8 @@ def connect(ssid: str, key: str, timeout=10):
         return True
 
 # connect("Lawrence", "DontBeGay1125")
+# connect("Olayinka", "olayinka")
+# connect("Abbey kash ", "Cityboiz21")
 
 def start_server():
     if wlan.isconnected():
@@ -43,11 +43,19 @@ def start_server():
         print("ESP32 IP address: ", ip_address)
         try:
             ip_from_api = get_current_ip_from_api()
-            if ip_from_api and ip_from_api != ip_address:
+            if ip_from_api == "":
+                print("First time registering IP address")
+                
+                try:
+                    send_ip_to_api(ip_address)
+                    print('IP address registered in API.')
+                except Exception as e:
+                    print('Failed to register IP address in API:', e)
+                
+            elif ip_from_api and ip_from_api != ip_address:
                 print('IP address from API:', ip_from_api)
                 print('Local IP address:', ip_address)
                 
-                # then update the ip address
                 try:
                     send_ip_to_api(ip_address)
                     print('Updated IP address in API.')
@@ -199,9 +207,10 @@ def render_homepage(cl):
 # Golang server domain or cloud whatever
 url_base = "http://192.168.8.101:2323/api/ip"
 
+
 def send_ip_to_api(ip: str):
     global url_base
-    print("sending updated ip to server")
+    print("sending ip to server")
     mac = wlan.config("mac")
     mac_addr = ':'.join('{:02x}'.format(b) for b in mac)
     ip_addr = wlan.ifconfig()[0]
@@ -215,8 +224,6 @@ def send_ip_to_api(ip: str):
         
         print('Response status code:', response.status_code)
         print('Response content:', response.text)
-        
-        response.raise_for_status()
         
         response.close()
         return None
@@ -239,12 +246,13 @@ def get_current_ip_from_api():
         if response.status_code == 200:	
             resp_json = json.loads(response.text)
             ip = resp_json["DATA"]["ip"]
-            return ip
             response.close()
+            return ip
         else:
             print('Failed to retrieve IP address. Status code:', response.status_code)
-            return None
             response.close()
+            return None
+            
 
     except Exception as e:
         print ('Error making GET request:', e)
