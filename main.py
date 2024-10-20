@@ -4,11 +4,14 @@ import network
 import socket
 import json
 import urequests as requests
+from ws import WebSocket
 
 # sw = machine.Pin(0, machine.Pin.IN)
 led = machine.Pin(2, machine.Pin.OUT)
 
 wlan = network.WLAN(network.STA_IF)
+WS_SERVER = "ws://209.38.167.138:8080/ws"
+
 
 def connect(ssid: str, key: str, timeout=10):
     wlan.active(True)
@@ -36,6 +39,51 @@ def connect(ssid: str, key: str, timeout=10):
 # connect("Lawrence", "DontBeGay1125")
 # connect("Olayinka", "olayinka")
 # connect("Abbey kash ", "Cityboiz21")
+
+def start_websocket():
+    if not wlan.isconnected():
+        print("WiFi must be connected before WebSocket could start")
+        return
+
+    print("Connecting to WebSocket server...")
+    webS = WebSocket(WS_SERVER)
+
+    try:
+        webS._connect()
+        print("Connected to WebSocket server")
+
+        # Send initial connection message
+        mac = wlan.config("mac")
+        mac_addr = ':'.join('{:02x}'.format(b) for b in mac)
+        ip_addr = wlan.ifconfig()[0]
+        initial_msg = json.dumps({
+            "type": "connect",
+            "mac_addr": mac_addr,
+            "ip_addr": ip_addr
+        })
+        webS.send(initial_msg)
+
+        while True:
+            msg = webS.receive()
+            if msg:
+                handle_message(json.loads(msg))
+
+    except Exception as e:
+        print("WebSocket error:", e)
+    finally:
+        webS.close()
+
+def handle_message(message):
+    if message.get("type") == "TripRequest":
+        blink_led(15, 0.1)
+
+def blink_led(times, delay):
+    for _ in range(times):
+        led.on()
+        time.sleep(delay)
+        led.off()
+        time.sleep(delay)
+
 
 def start_server():
     if wlan.isconnected():
@@ -205,7 +253,7 @@ def render_homepage(cl):
     
     
 # Golang server domain or cloud whatever
-url_base = "http://192.168.8.101:2323/api/ip"
+url_base = "http://209.38.167.138:2323/api/ip"
 
 
 def send_ip_to_api(ip: str):
